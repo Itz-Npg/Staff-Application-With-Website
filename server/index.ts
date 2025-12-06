@@ -176,15 +176,81 @@ async function exchangeCodeWithRequest(code: string, req: Request) {
   return response.json();
 }
 
-// GET /api/auth/login
+// GET /api/auth/status - Check if user is authenticated
+app.get('/api/auth/status', async (req: Request, res: Response) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie || '');
+    const sessionId = cookies['session'];
+    
+    if (!sessionId) {
+      return res.json({ connected: false });
+    }
+    
+    const odId = await getSessionOdId(sessionId);
+    
+    if (!odId) {
+      return res.json({ connected: false });
+    }
+    
+    // Verify user exists
+    await connectToDatabase();
+    const user = await User.findOne({ odId }).lean();
+    
+    res.json({ connected: !!user });
+  } catch (error) {
+    console.error('Auth status error:', error);
+    res.json({ connected: false });
+  }
+});
+
+// GET /api/auth/user - Get current user info
+app.get('/api/auth/user', async (req: Request, res: Response) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie || '');
+    const sessionId = cookies['session'];
+    
+    if (!sessionId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const odId = await getSessionOdId(sessionId);
+    
+    if (!odId) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+    
+    await connectToDatabase();
+    const user = await User.findOne({ odId }).lean();
+    
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      id: (user as any).discordId,
+      username: (user as any).username,
+      discriminator: (user as any).discriminator,
+      avatar: (user as any).avatar,
+      globalName: (user as any).globalName,
+    });
+  } catch (error) {
+    console.error('Auth user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/auth/login - Returns OAuth URL for client-side redirect
 app.get('/api/auth/login', (req: Request, res: Response) => {
   const state = crypto.randomBytes(16).toString('hex');
   const secure = isSecureRequest(req);
   
   const oauthUrl = buildDiscordOAuthUrl(state, req);
+  const redirectUri = buildRedirectUri(req);
   
   res.setHeader('Set-Cookie', createOAuthStateCookie(state, secure));
-  res.redirect(302, oauthUrl);
+  
+  // Return JSON so the client can redirect (avoids CORS issues with fetch following redirects)
+  res.json({ url: oauthUrl, redirectUri });
 });
 
 // GET /api/auth/callback
