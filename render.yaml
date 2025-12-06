@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: staffbot-dashboard
+    runtime: node
+    region: oregon
+    buildCommand: npm install --production=false && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+    autoDeploy: true
